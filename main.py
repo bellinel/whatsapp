@@ -3,8 +3,8 @@ import time
 from engine import session, User
 
 # Конфигурация
-GREEN_API_ID ="7105259866"
-GREEN_API_TOKEN = '2e3c9fbb79db4f8da8fb516fc8c0e5346d44401551cf4e5881'#"2e3c9fbb79db4f8da8fb516fc8c0e5346d44401551cf4e5881"
+GREEN_API_ID = '7105218511'  #"7105259866"
+GREEN_API_TOKEN = 'fb4cbfa4f35d4141b208cf56b8da429680dc269c41464b3b97'#'2e3c9fbb79db4f8da8fb516fc8c0e5346d44401551cf4e5881'#"
 BASE_URL = f"https://7105.api.greenapi.com/waInstance{GREEN_API_ID}"
 DELAY = 2
 
@@ -14,6 +14,8 @@ STATE_WAIT_PHONE = "wait_phone"
 STATE_WAIT_PHOTO_FRONT = "wait_photo_front"
 STATE_WAIT_PHOTO_BACK = "wait_photo_back"
 STATE_DONE = "done"
+STATE_WAIT_REGION = "wait_region"
+STATE_WAIT_LICENSE_TYPE = "wait_license_type"
 
 # Хранилища
 user_states = {}      # chat_id -> state
@@ -71,15 +73,7 @@ def send_image(chat_id, image_url, caption=""):
 
 # FSM логика
 def handle_message(user_id, chat_id, message_type, content):
-    if not user_id or not chat_id:
-        print("❌ Ошибка: отсутствует user_id или chat_id")
-        return
-
-    # Убедимся, что данные и состояние инициализированы
-    state = user_states.setdefault(user_id, None)
-    data = user_data.setdefault(user_id, {})
-
-    print(f"➡️ [{user_id}] Состояние: {state} | Тип сообщения: {message_type}")
+    state = user_states.get(user_id)
 
     if message_type == "text":
         text = content.strip()
@@ -91,10 +85,13 @@ def handle_message(user_id, chat_id, message_type, content):
                 return
             for u in users:
                 msg = (
-                    f"👤 ФИО: {u.fio}\n"
-                    f"📞 Телефон: {u.phone}\n"
-                    f"🖼 Фото (лицо): {u.photo_front}\n"
-                    f"🖼 Фото (оборот): {u.photo_back}\n"
+                    f"👤 Name: {u.fio}\n"
+                    f"📞 Phone: {u.phone}\n"
+                    f"🌍 Region: {u.region}\n"
+                    f"🎣 License type: {u.license_type}\n"
+                    f"🖼 Photo (front): {u.photo_front}\n"
+                    f"🖼 Photo (back): {u.photo_back}\n"
+
                     "———"
                 )
                 send_message(chat_id, msg)
@@ -107,18 +104,30 @@ def handle_message(user_id, chat_id, message_type, content):
             return
 
         if state == STATE_WAIT_NAME:
-            data["fio"] = text
+            user_data[user_id]["fio"] = text
             user_states[user_id] = STATE_WAIT_PHONE
-            send_message(chat_id, "Gracias! Ahora introduce su numero de contacto +34ххххххх")
+            send_message(chat_id, "Gracias! Ahora introduce su numero de contacto (+34...)")
             return
 
         elif state == STATE_WAIT_PHONE:
             if not text.replace("+", "").isdigit():
                 send_message(chat_id, "Por favor, ingrese un número válido con +34...")
                 return
-            data["phone"] = text
+            user_data[user_id]["phone"] = text
+            user_states[user_id] = "wait_region"
+            send_message(chat_id, "Gracias! Ahora escriba su región (ej: region de murcia , comunidad de madrid ….):")
+            return
+
+        elif state == "wait_region":
+            user_data[user_id]["region"] = text
+            user_states[user_id] = "wait_license_type"
+            send_message(chat_id, "Perfecto! Ahora escriba el tipo de licencia (ej: Marina , Dulce):")
+            return
+
+        elif state == "wait_license_type":
+            user_data[user_id]["license_type"] = text
             user_states[user_id] = STATE_WAIT_PHOTO_FRONT
-            send_message(chat_id, "Envíe una foto del anverso del documento (DNI/NIE)")
+            send_message(chat_id, "Gracias! Ahora envíe una foto del anverso del documento (DNI/NIE):")
             return
 
         elif state == STATE_DONE:
@@ -133,28 +142,33 @@ def handle_message(user_id, chat_id, message_type, content):
         url = content
 
         if state == STATE_WAIT_PHOTO_FRONT:
-            data["photo_front"] = url
+            user_data[user_id]["photo_front"] = url
             user_states[user_id] = STATE_WAIT_PHOTO_BACK
             send_message(chat_id, "Recibido! Ahora envíe una foto del reverso del documento (DNI/NIE)")
             return
 
         elif state == STATE_WAIT_PHOTO_BACK:
-            data["photo_back"] = url
+            user_data[user_id]["photo_back"] = url
             user_states[user_id] = STATE_DONE
+            try:
+                new_user = User(
+                    chat_id=user_id,
+                    fio=user_data[user_id]["fio"],
+                    phone=user_data[user_id]["phone"],
+                    photo_front=user_data[user_id]["photo_front"],
+                    photo_back=user_data[user_id]["photo_back"],
+                    region=user_data[user_id]["region"],
+                    license_type=user_data[user_id]["license_type"]
+                )
+                session.merge(new_user)
+                session.commit()
 
-            new_user = User(
-                chat_id=user_id,
-                fio=data.get("fio"),
-                phone=data.get("phone"),
-                photo_front=data.get("photo_front"),
-                photo_back=data.get("photo_back")
-            )
-            session.merge(new_user)
-            session.commit()
-
-            send_message(chat_id, "✅Tu solicitud fue enviada con exito! En breve contactamos con usted!")
-            reset_user(user_id)
-            return
+                send_message(chat_id, "✅Tu solicitud fue enviada con éxito! En breve contactamos con usted!")
+                reset_user(user_id)
+                return
+            except:
+                send_message(chat_id, "❌Error al guardar datos. Por favor, intente nuevamente.")
+                return
 
         else:
             send_message(chat_id, "Hola! Escriba /start para solicitar tu permiso de pesca!")
