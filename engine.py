@@ -19,7 +19,7 @@ class User(Base):
     photo_back = Column(String)
     region = Column(String)
     license_type = Column(String)
-    service_number = Column(String)
+    
 
     services = relationship("UserService", back_populates="user", cascade="all, delete-orphan")
 
