@@ -3,8 +3,8 @@ import time
 from engine import session, User
 
 # Конфигурация
-GREEN_API_ID = '7105218511'  #"7105259866"
-GREEN_API_TOKEN = 'fb4cbfa4f35d4141b208cf56b8da429680dc269c41464b3b97'#'2e3c9fbb79db4f8da8fb516fc8c0e5346d44401551cf4e5881'#"
+GREEN_API_ID = '7105259866'  #"7105259866"
+GREEN_API_TOKEN = '2e3c9fbb79db4f8da8fb516fc8c0e5346d44401551cf4e5881'#'2e3c9fbb79db4f8da8fb516fc8c0e5346d44401551cf4e5881'#"
 BASE_URL = f"https://7105.api.greenapi.com/waInstance{GREEN_API_ID}"
 DELAY = 2
 
