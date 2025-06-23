@@ -121,7 +121,7 @@ def handle_message(user_id, chat_id, message_type, content):
         elif state == "wait_region":
             user_data[user_id]["region"] = text
             user_states[user_id] = "wait_license_type"
-            send_message(chat_id, "Perfecto! Ahora escriba el tipo de licencia (ej: Marina , Dulce):")
+            send_message(chat_id, "Perfecto! Elige el tipo de licencia: Licencia de pesca maritima recreativa (1 año)/ Licencia de pesca continental (1 año)")
             return
 
         elif state == "wait_license_type":
